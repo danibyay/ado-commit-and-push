@@ -1,0 +1,66 @@
+stages:
+- stage: Build
+  displayName: Build 
+
+
+  jobs:
+  - job: Build
+    displayName: Build MachiningStrategist
+    timeoutInMinutes: 300
+    pool:
+      vmImage: 'windows-latest'
+
+       
+    steps:
+    - checkout: self
+      clean: true
+    
+    - powershell: |
+        Write-Host  "##[debug]git branch"
+        git branch
+        
+        Write-Host  "##[debug]git log latest commit"
+        git log -1 --stat
+        
+        Write-Host  "##[debug]git status"
+        git status
+
+        Write-Host  "##[command]git fetch origin feature branch"
+        git fetch origin $(Build.SourceBranch)
+        
+        Write-Host  "##[command]create new branch"
+        git checkout -b update_db6
+      displayName: create new branch before translations database update
+
+    # This is a batch script that update files and makes a commit automatically
+    - script: |
+        echo on
+        echo "Auto Update"
+        workspace.cmd lang autoupdate
+        echo "Export All"
+        workspace.cmd lang exportall
+      condition: succeededOrFailed()
+      displayName: update translations database mdb file(s)
+      workingDirectory: '$(Build.SourcesDirectory)'
+
+    - powershell: |
+        Write-Host  "##[debug]git log latest commit"
+        git log -1 --stat
+        
+        Write-Host  "##[debug]git status"
+        git status
+
+        $commit_hash = git rev-parse --verify --short HEAD
+        Write-Host  "##[debug]commit hash of latest commit"
+        Write-Host  $commit_hash_uu
+        
+        Write-Host "##[command] git checkout feature branch"
+        git checkout 'feature/$(Build.SourceBranchName)'
+        
+        Write-Host "##[command] do cherry pick for feature branch"
+        git cherry-pick $commit_hash
+
+        Write-Host "##[command] git push"
+        git push origin 'feature/$(Build.SourceBranchName)'
+      displayName: Commit translations database changes
+      workingDirectory: $(Build.SourcesDirectory)
